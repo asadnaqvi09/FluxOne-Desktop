@@ -1,0 +1,62 @@
+// Central API path constants (no logic). Base URL already includes `/api` — do not prefix again. Align with server/src/routes/index.js
+
+export const ENDPOINTS = {
+  health: '/health',
+  network: '/network',
+  auth: {
+    login: '/auth/login',
+    logout: '/auth/logout',
+    me: '/auth/me',
+    lock: '/auth/lock',
+    unlock: '/auth/unlock',
+  },
+  sync: '/sync',
+  syncStatus: '/sync/status',
+  syncBootstrap: '/sync/bootstrap',
+  setup: {
+    status: '/setup/status',
+    configure: '/setup/configure',
+    login: '/setup/login',
+    bootstrap: '/setup/bootstrap',
+  },
+  cashDrawer: {
+    open: '/cash-drawer/open',
+    current: '/cash-drawer/current',
+    expected: '/cash-drawer/expected',
+    close: '/cash-drawer/close',
+  },
+  categories: '/categories',
+  products: '/products',
+  productBySku: (sku) => `/products/sku/${encodeURIComponent(sku)}`,
+  sales: {
+    tabs: '/sales/tabs',
+    tab: (id) => `/sales/tabs/${id}`,
+    addItem: (tabId) => `/sales/tabs/${tabId}/items`,
+    item: (tabId, lineId) => `/sales/tabs/${tabId}/items/${lineId}`,
+    totals: (tabId) => `/sales/tabs/${tabId}/totals`,
+    checkout: (tabId) => `/sales/tabs/${tabId}/checkout`,
+  },
+  invoices: {
+    list: '/invoices',
+    byId: (id) => `/invoices/${id}`,
+    print: (id) => `/invoices/${id}/print`,
+    return: (id) => `/invoices/${id}/return`,
+    exchangeStart: (id) => `/invoices/${id}/exchange/start`,
+    exchanges: (id) => `/invoices/${id}/exchanges`,
+  },
+  notifications: {
+    list: '/notifications',
+    read: (id) => `/notifications/${id}/read`,
+    clear: '/notifications',
+  },
+  admin: {
+    logs: '/admin/logs',
+    products: '/admin/products',
+    product: (id) => `/admin/products/${id}`,
+    employees: '/admin/employees',
+    employee: (id) => `/admin/employees/${encodeURIComponent(id)}`,
+    cashiersCurrent: '/admin/cashiers/current',
+    cashiersAssign: '/admin/cashiers/assign',
+    storeProfile: '/admin/store-profile',
+  },
+}

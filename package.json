@@ -1,0 +1,17 @@
+{
+  "name": "fluxone",
+  "version": "1.1.0",
+  "private": true,
+  "description": "FluxOne offline-first POS — client, server, Electron",
+  "scripts": {
+    "dev:server": "npm run dev --prefix server",
+    "dev:client": "npm run dev --prefix client",
+    "build:client": "npm run build --prefix client",
+    "electron:install": "npm install --prefix electron",
+    "electron:dev": "npm run dev --prefix electron",
+    "electron:dev:dist": "npm run dev:dist --prefix electron",
+    "electron:dist": "npm run build --prefix client && npm run dist --prefix electron",
+    "electron:pack": "npm run build --prefix client && npm run pack --prefix electron",
+    "setup": "npm install --prefix server && npm install --prefix client && npm install --prefix electron && npm run setup --prefix server"
+  }
+}

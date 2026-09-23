@@ -1,0 +1,88 @@
+{
+  "name": "fluxone-desktop",
+  "version": "1.1.0",
+  "private": true,
+  "description": "POS Cashier — Software Flux Solution (Electron Phase 4)",
+  "author": "Software Flux Solution",
+  "main": "src/main.js",
+  "type": "commonjs",
+  "scripts": {
+    "start": "electron .",
+    "dev": "electron .",
+    "dev:dist": "electron . --dist",
+    "prepare:dist": "node scripts/prepare-dist.mjs",
+    "pack": "npm run prepare:dist && electron-builder --dir",
+    "dist": "npm run prepare:dist && electron-builder --win nsis"
+  },
+  "build": {
+    "appId": "com.softwareflux.fluxone.pos",
+    "productName": "FluxOne",
+    "copyright": "Copyright © Software Flux Solution",
+    "afterPack": "./scripts/after-pack.cjs",
+    "directories": {
+      "output": "release",
+      "buildResources": "assets"
+    },
+    "files": [
+      "src/**/*",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "../server",
+        "to": "server",
+        "filter": [
+          "**/*",
+          "!**/.env",
+          "!**/.env.*",
+          "!**/data/*.db",
+          "!**/data/*.db-*",
+          "!**/scripts/**",
+          "!**/node_modules/fluxone",
+          "!**/node_modules/fluxone/**",
+          "!**/node_modules/nodemon/**",
+          "!**/node_modules/.cache/**"
+        ]
+      },
+      {
+        "from": "../client/dist",
+        "to": "client-dist",
+        "filter": [
+          "**/*"
+        ]
+      },
+      {
+        "from": "resources/nodejs",
+        "to": "nodejs",
+        "filter": [
+          "**/*"
+        ]
+      }
+    ],
+    "win": {
+      "icon": "assets/icon.png",
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "artifactName": "FluxOne-Setup-${version}.${ext}"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "POS Cashier",
+      "uninstallDisplayName": "POS Cashier — Software Flux Solution"
+    },
+    "asar": true
+  },
+  "devDependencies": {
+    "electron": "^37.2.0",
+    "electron-builder": "^26.0.12"
+  }
+}

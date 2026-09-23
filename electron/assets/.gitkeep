@@ -1,0 +1,2 @@
+# Place Windows icon here as icon.ico (optional for Phase 4).
+# electron-builder looks at electron/assets/ for buildResources.
