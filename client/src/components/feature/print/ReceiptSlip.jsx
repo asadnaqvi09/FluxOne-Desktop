@@ -84,7 +84,6 @@ export default function ReceiptSlip({ invoice, store }) {
         <br />
         {t('receipt.cashierLine', {
           name: invoice.cashier || t('receipt.cashierFallback'),
-          id: invoice.cashierId || '',
         })}
       </p>
 

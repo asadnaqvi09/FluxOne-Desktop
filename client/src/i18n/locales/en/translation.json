@@ -453,7 +453,7 @@
     "print": "Print",
     "download": "Download",
     "newSale": "New Sale",
-    "cashierLine": "Cashier: {{name}} ({{id}})",
+    "cashierLine": "Cashier: {{name}}",
     "cashierFallback": "Cashier",
     "colItem": "Item",
     "colId": "ID",

@@ -1,3 +1,10 @@
+import {
+  isBcryptPasswordHash,
+  resolveCloudPasswordHash,
+} from '../../shared/utils/passwordHash.js';
+
+export { isBcryptPasswordHash, resolveCloudPasswordHash };
+
 const SKIP_CLOUD_ROLES = new Set(['inventory_manager', 'b2b_admin']);
 
 const CLOUD_ROLE_TO_POS = Object.freeze({
@@ -9,7 +16,9 @@ export function normalizeSnapshot(data = {}) {
   return {
     tenant: data.tenant ?? null,
     branch: data.branch ?? null,
-    users: data.users ?? [],
+    // Preserve "users key missing" vs "users: []" for deactivate-on-full-list.
+    users: Array.isArray(data.users) ? data.users : [],
+    usersProvided: Array.isArray(data.users),
     categories: data.categories ?? [],
     products: data.products ?? [],
     taxes: data.taxes ?? [],
@@ -35,9 +44,16 @@ export function mapCloudUserToEmployee(user = {}) {
     return null;
   }
 
-  const passwordHash = user.passwordHash ?? user.password_hash ?? null;
+  const passwordHash = resolveCloudPasswordHash(user);
   const name = user.name ?? user.fullName ?? user.full_name ?? null;
-  const email = user.email ?? user.loginId ?? user.login_id ?? user.userId ?? user.user_id ?? null;
+  // Contract: loginId → local email / user_id (POS login key)
+  const email =
+    user.loginId ??
+    user.login_id ??
+    user.email ??
+    user.userId ??
+    user.user_id ??
+    null;
   if (!user.id || !email || !name) {
     return null;
   }

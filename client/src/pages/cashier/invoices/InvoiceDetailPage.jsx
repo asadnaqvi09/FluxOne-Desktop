@@ -131,7 +131,7 @@ export default function InvoiceDetailPage() {
                 {storeName} · {storeBranch}
                 <br />
                 {format(inv.createdAt, 'd MMM yyyy, h:mm a')}
-                {inv.cashierId ? ` · ${inv.cashierId}` : ''}
+                {inv.cashier ? ` · ${inv.cashier}` : ''}
               </p>
               <div className="mt-2 flex flex-wrap gap-2">
                 <span className="text-sm text-muted-foreground">

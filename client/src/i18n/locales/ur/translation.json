@@ -452,7 +452,7 @@
     "print": "پرنٹ",
     "download": "ڈاؤن لوڈ",
     "newSale": "نئی فروخت",
-    "cashierLine": "کیشئر: {{name}} ({{id}})",
+    "cashierLine": "کیشئر: {{name}}",
     "cashierFallback": "کیشئر",
     "colItem": "آئٹم",
     "colId": "آئی ڈی",

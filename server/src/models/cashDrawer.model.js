@@ -4,6 +4,7 @@
  */
 import bcrypt from 'bcrypt';
 import { connectDb } from '../config/database.js';
+import { isBcryptPasswordHash } from '../shared/utils/passwordHash.js';
 
 const DRAWER_FIELDS = `
   id,
@@ -180,7 +181,11 @@ export function verifyBranchManagerPassword(password) {
   `
     )
     .all();
-  return admins.some((admin) => bcrypt.compareSync(password, admin.passwordHash));
+  return admins.some(
+    (admin) =>
+      isBcryptPasswordHash(admin.passwordHash) &&
+      bcrypt.compareSync(password, admin.passwordHash)
+  );
 }
 
 export function logActivity(row) {

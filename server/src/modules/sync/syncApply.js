@@ -14,6 +14,7 @@ import {
   normalizeSnapshot,
   splitCloudCategories,
 } from './mappers.js';
+import { isBcryptPasswordHash } from '../../shared/utils/passwordHash.js';
 
 export function runApplyTransaction(fn) {
   return connectDb().transaction(fn)();
@@ -100,7 +101,9 @@ export function applyCatalogSnapshot(data = {}, { isBootstrap = false, deferBoot
     if (isBootstrap) {
       purgeLegacySeedData(db);
     }
-    counts.users = applyUsers(db, snapshot.users);
+    counts.users = applyUsers(db, snapshot.users, {
+      usersProvided: snapshot.usersProvided,
+    });
     const categoryCounts = applyCategories(db, snapshot.categories);
     counts.categories = categoryCounts.categories;
     counts.subcategories = categoryCounts.subcategories;
@@ -146,7 +149,7 @@ export function applyCatalogSnapshot(data = {}, { isBootstrap = false, deferBoot
   return counts;
 }
 
-function applyUsers(db, users = []) {
+function applyUsers(db, users = [], { usersProvided = false } = {}) {
   const stmt = db.prepare(
     `
     INSERT INTO employees (
@@ -159,26 +162,75 @@ function applyUsers(db, users = []) {
       name = excluded.name,
       role = excluded.role,
       email = excluded.email,
-      password_hash = COALESCE(excluded.password_hash, employees.password_hash),
+      password_hash = CASE
+        WHEN excluded.password_hash IS NOT NULL AND excluded.password_hash != ''
+        THEN excluded.password_hash
+        ELSE employees.password_hash
+      END,
       picture_url = excluded.picture_url,
       is_active = excluded.is_active,
       updated_at = datetime('now')
   `
   );
 
+  const keepActiveIds = [];
   let count = 0;
   for (const user of users) {
     const row = mapCloudUserToEmployee(user);
     if (!row) continue;
+    keepActiveIds.push(row.id);
+
+    const incomingHash = isBcryptPasswordHash(row.passwordHash)
+      ? row.passwordHash
+      : null;
+    const existing = db
+      .prepare(`SELECT id, password_hash AS passwordHash FROM employees WHERE id = ?`)
+      .get(row.id);
+    const existingHash = isBcryptPasswordHash(existing?.passwordHash)
+      ? existing.passwordHash
+      : null;
+
+    // New cloud user without a bcrypt hash cannot authenticate offline — skip insert.
+    if (!existing && !incomingHash) continue;
+
     retireLegacyEmployeeLogin(db, row.userId, row.id);
     stmt.run({
       ...row,
-      passwordHash: row.passwordHash || '',
+      // Never write '' on purpose when a real hash exists; empty only if legacy row had none.
+      passwordHash: incomingHash ?? existingHash ?? existing?.passwordHash ?? '',
       pictureUrl: row.pictureUrl ?? null,
     });
     count += 1;
   }
+
+  // Cloud bootstrap/delta sends the full active BM+cashier list — drop locals not present.
+  if (usersProvided) {
+    deactivateMissingSyncedEmployees(db, keepActiveIds);
+  }
+
   return count;
+}
+
+function deactivateMissingSyncedEmployees(db, syncedIds = []) {
+  // Require a non-empty active cloud list so a buggy/partial empty payload
+  // cannot wipe every local BM/cashier.
+  if (!Array.isArray(syncedIds) || syncedIds.length === 0) {
+    return;
+  }
+
+  const placeholders = syncedIds.map(() => '?').join(', ');
+  db.prepare(
+    `
+    UPDATE employees
+    SET is_active = 0, updated_at = datetime('now')
+    WHERE is_active = 1
+      AND role IN ('admin', 'cashier')
+      AND id NOT LIKE 'ADM-%'
+      AND id NOT LIKE 'CSH-%'
+      AND id NOT LIKE 'SUP-%'
+      AND id NOT IN (${placeholders})
+  `
+  ).run(...syncedIds);
 }
 
 function applyCategories(db, categories = []) {

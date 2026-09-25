@@ -20,6 +20,7 @@ import { clearAuthCookie, setAuthCookie } from '../shared/utils/authCookie.js';
 import * as authModel from '../models/auth.model.js';
 import * as notificationModel from '../models/notification.model.js';
 import * as outboxHooks from '../modules/sync/outboxHooks.js';
+import { isBcryptPasswordHash } from '../shared/utils/passwordHash.js';
 import { isSyncReady } from '../shared/middlewares/sync.middleware.js';
 
 /**
@@ -33,6 +34,11 @@ function resolveCashierSessionSyncOk(employeeId) {
   return 0;
 }
 
+function passwordMatches(typedPassword, storedHash) {
+  if (!typedPassword || !isBcryptPasswordHash(storedHash)) return false;
+  return bcrypt.compareSync(typedPassword, storedHash);
+}
+
 // Login
 export function login(req, res) {
   try {
@@ -42,7 +48,7 @@ export function login(req, res) {
     if (!employee || !employee.isActive) {
       return error(res, 'Invalid user ID or password', 401);
     }
-    if (!bcrypt.compareSync(password, employee.passwordHash)) {
+    if (!passwordMatches(password, employee.passwordHash)) {
       return error(res, 'Invalid user ID or password', 401);
     }
 
@@ -232,7 +238,7 @@ export function unlock(req, res) {
     const employee = authModel.findEmployeeById(req.auth.employeeId);
     if (!employee || !employee.isActive) return error(res, 'Unauthorized', 401);
     if (!value) return error(res, 'Password is required', 400);
-    const ok = bcrypt.compareSync(value, employee.passwordHash);
+    const ok = passwordMatches(value, employee.passwordHash);
     if (!ok) return error(res, 'Invalid credentials', 401);
     authModel.loginTransaction(() => {
       authModel.setSessionLocked(req.auth.sessionId, false);
