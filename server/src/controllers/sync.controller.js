@@ -19,6 +19,8 @@ function publicMeta(meta) {
     cloudApiUrl: meta.cloudApiUrl,
     lastPullAt: meta.lastPullAt,
     lastPushAt: meta.lastPushAt,
+    syncVersion: meta.syncVersion ?? null,
+    branchStatus: meta.branchStatus || 'open',
     bootstrapDone: Boolean(meta.bootstrapDone),
   };
 }
@@ -135,6 +137,19 @@ export async function sync(req, res) {
     }
 
     const cycle = await syncService.runSyncCycle();
+    const branchDenied =
+      cycle.push?.reason === 'branch_denied' || cycle.pull?.reason === 'branch_denied';
+    if (branchDenied) {
+      return error(
+        res,
+        cycle.push?.error ||
+          cycle.pull?.error ||
+          'Branch access denied. Sync stopped — local data was not wiped.',
+        403,
+        'BRANCH_DENIED'
+      );
+    }
+
     const sessionResult = finishSessionSync(req, 'cloud', {
       mode: 'cycle',
       push: cycle.push,

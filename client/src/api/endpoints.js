@@ -28,6 +28,7 @@ export const ENDPOINTS = {
   categories: '/categories',
   products: '/products',
   productBySku: (sku) => `/products/sku/${encodeURIComponent(sku)}`,
+  productChildren: (id) => `/products/${encodeURIComponent(id)}/children`,
   sales: {
     tabs: '/sales/tabs',
     tab: (id) => `/sales/tabs/${id}`,

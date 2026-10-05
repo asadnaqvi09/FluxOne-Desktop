@@ -124,7 +124,7 @@
     "stepActivate": "Activate",
     "deviceId": "Device ID: {{deviceId}}",
     "cloudApiUrlLabel": "Cloud API URL",
-    "cloudApiUrlPlaceholder": "https://fluxone-b2b.onrender.com",
+    "cloudApiUrlPlaceholder": "https://fluxone-api.sprintexa.com",
     "cloudApiUrlHint": "Production cloud is pre-filled. `/api` is added automatically.",
     "saveContinue": "Save & Continue",
     "failedSaveCloudUrl": "Failed to save cloud URL",
@@ -258,7 +258,15 @@
     "scanFailed": "Scan failed",
     "closeTab": "Close tab",
     "openAnotherSale": "Open another sale",
-    "saleTabLabel": "Sale {{n}}"
+    "saleTabLabel": "Sale {{n}}",
+    "chooseVariant": "Choose options",
+    "chooseVariantHint": "Select each option to add the correct SKU to the cart.",
+    "loadingVariants": "Loading variants…",
+    "failedLoadVariants": "Failed to load variants",
+    "noVariants": "No variant options available",
+    "selectAllOptions": "Select all options to continue",
+    "addToCart": "Add to cart",
+    "variantsBadge": "Variants"
   },
 
   "cart": {

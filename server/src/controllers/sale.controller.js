@@ -100,6 +100,10 @@ export function addItem(req, res) {
       ? catalogModel.findProductById(req.body.productId)
       : catalogModel.findBySkuOrBarcode(req.body.sku);
     if (!product) return error(res, 'Product not found', 404);
+    // Never sell variant parent rows — cart must use child / single / bundle ids
+    if (product.isVariantParent || product.productType === 'variant') {
+      return error(res, 'Select a variant option before adding to cart', 400);
+    }
 
     const qty = req.body.qty ?? 1;
     const existing = saleModel.findItemByProduct(tab.id, product.id);

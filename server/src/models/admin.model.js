@@ -8,6 +8,8 @@ const PRODUCT_DETAIL_FIELDS = `
   p.category_id AS categoryId, p.subcategory_id AS subcategoryId,
   p.price, p.discount, p.stock, p.is_popular AS isPopular,
   p.is_active AS isActive, p.updated_at AS updatedAt,
+  p.product_type AS productType, p.parent_id AS parentId,
+  p.variant_label AS variantLabel,
   c.name AS categoryName, s.name AS subcategoryName
 `;
 

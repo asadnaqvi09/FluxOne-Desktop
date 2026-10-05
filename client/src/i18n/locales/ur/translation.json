@@ -123,7 +123,7 @@
     "stepActivate": "فعال کریں",
     "deviceId": "ڈیوائس آئی ڈی: {{deviceId}}",
     "cloudApiUrlLabel": "کلاؤڈ API یو آر ایل",
-    "cloudApiUrlPlaceholder": "https://fluxone-b2b.onrender.com",
+    "cloudApiUrlPlaceholder": "https://fluxone-api.sprintexa.com",
     "cloudApiUrlHint": "پروڈکشن کلاؤڈ پہلے سے بھرا ہوا ہے۔ `/api` خود بخود شامل ہوتا ہے۔",
     "saveContinue": "محفوظ کریں اور جاری رکھیں",
     "failedSaveCloudUrl": "کلاؤڈ یو آر ایل محفوظ کرنے میں ناکامی",
@@ -257,7 +257,15 @@
     "scanFailed": "اسکین ناکام",
     "closeTab": "ٹیب بند کریں",
     "openAnotherSale": "ایک اور فروخت کھولیں",
-    "saleTabLabel": "فروخت {{n}}"
+    "saleTabLabel": "فروخت {{n}}",
+    "chooseVariant": "آپشن منتخب کریں",
+    "chooseVariantHint": "صحیح ایس کے یو کارٹ میں شامل کرنے کے لیے ہر آپشن منتخب کریں۔",
+    "loadingVariants": "ویرینٹس لوڈ ہو رہے ہیں…",
+    "failedLoadVariants": "ویرینٹس لوڈ ناکام",
+    "noVariants": "کوئی ویرینٹ آپشن دستیاب نہیں",
+    "selectAllOptions": "جاری رکھنے کے لیے تمام آپشن منتخب کریں",
+    "addToCart": "کارٹ میں شامل کریں",
+    "variantsBadge": "ویرینٹس"
   },
 
   "cart": {

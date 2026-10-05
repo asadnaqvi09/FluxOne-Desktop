@@ -15,7 +15,7 @@ import { cn } from '@/lib/utils'
 import { PATHS } from '@/router/paths'
 import { LanguageSelect } from '@/layouts/Navbar/LanguageSelect'
 
-const DEFAULT_CLOUD_URL = 'https://fluxone-b2b.onrender.com'
+const DEFAULT_CLOUD_URL = 'https://fluxone-api.sprintexa.com'
 
 export default function SetupWizardPage() {
   const { t } = useTranslation()

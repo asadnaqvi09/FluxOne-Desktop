@@ -11,8 +11,40 @@ const PRODUCT_FIELDS = `
   p.discount,
   p.stock,
   p.is_popular AS isPopular,
-  p.image_url AS imageUrl
+  p.image_url AS imageUrl,
+  p.product_type AS productType,
+  p.parent_id AS parentId,
+  p.variant_label AS variantLabel,
+  p.variant_options AS variantOptions,
+  p.bundle_items AS bundleItems
 `;
+
+function parseJsonArray(value) {
+  if (Array.isArray(value)) return value;
+  if (typeof value !== 'string' || !value) return [];
+  try {
+    const parsed = JSON.parse(value);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+/** Normalize DB product row for API / POS (variant parent is never sellable). */
+export function decorateProduct(row) {
+  if (!row) return null;
+  const productType = row.productType || 'single';
+  return {
+    ...row,
+    productType,
+    parentId: row.parentId || null,
+    variantLabel: row.variantLabel || null,
+    variantOptions: parseJsonArray(row.variantOptions),
+    bundleItems: parseJsonArray(row.bundleItems),
+    isVariantParent: productType === 'variant',
+    isPopular: Boolean(row.isPopular),
+  };
+}
 
 export function listCategories() {
   const db = connectDb();
@@ -60,7 +92,7 @@ export function listSubcategories(categoryId) {
 
 export function findBySkuOrBarcode(code) {
   const db = connectDb();
-  return (
+  const row =
     db
       .prepare(
         `
@@ -70,13 +102,13 @@ export function findBySkuOrBarcode(code) {
       LIMIT 1
     `
       )
-      .get(code, code) || null
-  );
+      .get(code, code) || null;
+  return decorateProduct(row);
 }
 
 export function findProductById(id) {
   const db = connectDb();
-  return (
+  const row =
     db
       .prepare(
         `
@@ -86,8 +118,23 @@ export function findProductById(id) {
       LIMIT 1
     `
       )
-      .get(id) || null
-  );
+      .get(id) || null;
+  return decorateProduct(row);
+}
+
+export function listChildren(parentId) {
+  const db = connectDb();
+  const rows = db
+    .prepare(
+      `
+      SELECT ${PRODUCT_FIELDS}
+      FROM products p
+      WHERE p.is_active = 1 AND p.parent_id = ?
+      ORDER BY p.variant_label ASC, p.name ASC, p.sku ASC
+    `
+    )
+    .all(parentId);
+  return rows.map(decorateProduct);
 }
 
 export function getProductTaxes(productId) {
@@ -128,9 +175,14 @@ export function getTaxesForProducts(productIds) {
   return map;
 }
 
+/**
+ * Cashier catalog grid:
+ * - Browse: top-level only (parent_id IS NULL). Variant parents always listed;
+ *   single/bundle need stock > 0.
+ * - Search: also match children by sku / variant_label / options JSON.
+ */
 export function listProducts({ categoryId, subcategoryId, q, popular, page, pageSize }) {
-  // Cashier catalog: hide zero-stock items (admin list is separate).
-  const where = ['p.is_active = 1', 'p.stock > 0'];
+  const where = ['p.is_active = 1'];
   const params = {};
   if (popular) where.push('p.is_popular = 1');
   if (categoryId) {
@@ -142,8 +194,24 @@ export function listProducts({ categoryId, subcategoryId, q, popular, page, page
     params.subcategoryId = subcategoryId;
   }
   if (q) {
-    where.push("(p.name LIKE @q OR p.sku LIKE @q OR IFNULL(p.barcode, '') LIKE @q)");
+    where.push(`(
+      p.name LIKE @q
+      OR p.sku LIKE @q
+      OR IFNULL(p.barcode, '') LIKE @q
+      OR IFNULL(p.variant_label, '') LIKE @q
+      OR IFNULL(p.variant_options, '') LIKE @q
+    )`);
+    where.push(`(
+      p.product_type = 'variant'
+      OR (p.product_type != 'variant' AND p.stock > 0)
+    )`);
     params.q = `%${q}%`;
+  } else {
+    where.push('p.parent_id IS NULL');
+    where.push(`(
+      p.product_type = 'variant'
+      OR p.stock > 0
+    )`);
   }
   const whereSql = where.join(' AND ');
   const db = connectDb();
@@ -163,6 +231,7 @@ export function listProducts({ categoryId, subcategoryId, q, popular, page, page
       LIMIT @limit OFFSET @offset
     `
     )
-    .all(params);
+    .all(params)
+    .map(decorateProduct);
   return { items, total, page, pageSize };
 }

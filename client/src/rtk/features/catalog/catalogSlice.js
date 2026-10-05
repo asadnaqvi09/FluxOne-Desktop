@@ -77,7 +77,9 @@ export const fetchProductBySku = createAsyncThunk(
       })
       return {
         sku,
+        needsVariantPick: Boolean(data?.needsVariantPick),
         product: mapApiProduct(data?.product),
+        children: mapApiProducts(data?.children || []),
       }
     } catch (error) {
       return rejectWithValue(toThunkError(error))

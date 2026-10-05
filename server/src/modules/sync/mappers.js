@@ -195,6 +195,28 @@ export function resolveProductCategoryIds(product, childParentMap) {
   };
 }
 
+function resolveProductType(product = {}) {
+  const raw = String(
+    product.type ?? product.productType ?? product.product_type ?? 'single'
+  ).toLowerCase();
+  if (raw === 'bundle' || raw === 'variant') return raw;
+  return 'single';
+}
+
+function stringifyJsonArray(value) {
+  if (Array.isArray(value)) return JSON.stringify(value);
+  if (typeof value === 'string') {
+    try {
+      const parsed = JSON.parse(value);
+      return Array.isArray(parsed) ? JSON.stringify(parsed) : '[]';
+    } catch {
+      return '[]';
+    }
+  }
+  return '[]';
+}
+
+/** Upsert products including parent/child fields — do not invent sellable stock on parent. */
 export function mapCloudProductRow(product, { childParentMap, inventoryMap }) {
   if (!product.id || !product.name) return null;
 
@@ -206,6 +228,9 @@ export function mapCloudProductRow(product, { childParentMap, inventoryMap }) {
     stockFromInventory !== undefined
       ? stockFromInventory
       : Number(product.stock ?? product.quantity ?? 0);
+
+  const productType = resolveProductType(product);
+  const parentId = product.parentId ?? product.parent_id ?? null;
 
   return {
     id: product.id,
@@ -235,6 +260,13 @@ export function mapCloudProductRow(product, { childParentMap, inventoryMap }) {
     imageUrl: product.imageUrl ?? product.image_url ?? null,
     isActive: resolveEntityIsActive(product),
     taxIds: collectProductTaxIds(product),
+    productType,
+    parentId,
+    variantLabel: product.variantLabel ?? product.variant_label ?? null,
+    variantOptions: stringifyJsonArray(
+      product.variantOptions ?? product.variant_options ?? []
+    ),
+    bundleItems: stringifyJsonArray(product.bundleItems ?? product.bundle_items ?? []),
   };
 }
 
@@ -306,6 +338,21 @@ export function mapCloudCounterRow(counter = {}) {
   };
 }
 
+/** Format cloud slipPolicies[] into printable receipt footer text. */
+export function formatSlipPolicies(policies) {
+  if (!Array.isArray(policies)) return null;
+  const lines = policies
+    .filter((p) => p && (p.printOnSlip === true || p.print_on_slip === true))
+    .map((p) => {
+      const name = String(p.name || '').trim();
+      const detail = String(p.detail || p.body || '').trim();
+      if (name && detail) return `${name}: ${detail}`;
+      return name || detail;
+    })
+    .filter(Boolean);
+  return lines.join('\n');
+}
+
 /**
  * First present own-key on `obj` (null/undefined → '').
  * Returns `undefined` when none of the keys exist (caller should not overwrite).
@@ -353,9 +400,7 @@ export function mapCompanyToStoreProfile(company = {}, branch = null) {
     ? (company.email ?? company.contactEmail ?? company.contact_email ?? null)
     : null;
 
-  // Prefer explicit keys; if company payload has no footer keys at all, still
-  // clear when company is present so policy-off deltas that omit/null fields
-  // do not leave COALESCE-stuck policy text on the slip.
+  // Prefer slipPolicies (printOnSlip only); fallback returnInstructions / returnPolicy.
   let warningMessage;
   let returnInstructions;
   if (hasCompany) {
@@ -364,12 +409,19 @@ export function mapCompanyToStoreProfile(company = {}, branch = null) {
       'warning_message',
       'warning',
     ]);
-    returnInstructions = pickPresentText(company, [
-      'returnPolicy',
-      'return_policy',
-      'returnInstructions',
-      'return_instructions',
-    ]);
+    const fromPolicies = formatSlipPolicies(
+      company.slipPolicies ?? company.slip_policies ?? company.policies
+    );
+    if (fromPolicies !== null) {
+      returnInstructions = fromPolicies;
+    } else {
+      returnInstructions = pickPresentText(company, [
+        'returnPolicy',
+        'return_policy',
+        'returnInstructions',
+        'return_instructions',
+      ]);
+    }
     if (warningMessage === undefined) warningMessage = '';
     if (returnInstructions === undefined) returnInstructions = '';
   }

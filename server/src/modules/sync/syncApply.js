@@ -126,12 +126,21 @@ export function applyCatalogSnapshot(data = {}, { isBootstrap = false, deferBoot
     const tenantId = snapshot.tenant?.id ?? snapshot.tenant?.tenantId ?? null;
     const branchId = snapshot.branch?.id ?? snapshot.branch?.branchId ?? null;
     const pullAt = new Date().toISOString();
+    // Prefer cloud syncVersion as delta cursor
+    const syncVersion =
+      data.syncVersion ?? data.sync_version ?? pullAt;
+    const branchStatusRaw = snapshot.branch?.status ?? snapshot.branch?.branchStatus;
+    const branchStatus = branchStatusRaw
+      ? String(branchStatusRaw).toLowerCase()
+      : undefined;
 
     const shouldMarkBootstrapDone = isBootstrap && !deferBootstrapDone;
     syncMetaModel.updateSyncMeta({
       tenantId: tenantId ?? undefined,
       branchId: branchId ?? undefined,
       lastPullAt: pullAt,
+      syncVersion,
+      branchStatus,
       bootstrapDone: shouldMarkBootstrapDone ? true : undefined,
     });
 
@@ -323,10 +332,12 @@ function applyProducts(db, products = [], { inventoryMap, categories }) {
     `
     INSERT INTO products (
       id, sku, barcode, name, category_id, subcategory_id,
-      price, discount, stock, is_popular, image_url, is_active
+      price, discount, stock, is_popular, image_url, is_active,
+      product_type, parent_id, variant_label, variant_options, bundle_items
     ) VALUES (
       @id, @sku, @barcode, @name, @categoryId, @subcategoryId,
-      @price, @discount, @stock, @isPopular, @imageUrl, @isActive
+      @price, @discount, @stock, @isPopular, @imageUrl, @isActive,
+      @productType, @parentId, @variantLabel, @variantOptions, @bundleItems
     )
     ON CONFLICT(id) DO UPDATE SET
       sku = excluded.sku,
@@ -340,13 +351,26 @@ function applyProducts(db, products = [], { inventoryMap, categories }) {
       is_popular = excluded.is_popular,
       image_url = excluded.image_url,
       is_active = excluded.is_active,
+      product_type = excluded.product_type,
+      parent_id = excluded.parent_id,
+      variant_label = excluded.variant_label,
+      variant_options = excluded.variant_options,
+      bundle_items = excluded.bundle_items,
       updated_at = datetime('now')
   `
   );
 
   let count = 0;
   const insertedIds = new Set();
-  for (const product of products) {
+  // Parents before children so FK parent_id succeeds
+  const ordered = [...products].sort((a, b) => {
+    const aParent = a.parentId ?? a.parent_id;
+    const bParent = b.parentId ?? b.parent_id;
+    if (!aParent && bParent) return -1;
+    if (aParent && !bParent) return 1;
+    return 0;
+  });
+  for (const product of ordered) {
     const row = mapCloudProductRow(product, { childParentMap, inventoryMap });
     if (!row) continue;
     if (row.subcategoryId && !subcategoryIds.has(row.subcategoryId)) {
@@ -372,6 +396,11 @@ function applyProducts(db, products = [], { inventoryMap, categories }) {
       isPopular: row.isPopular,
       imageUrl: row.imageUrl,
       isActive: row.isActive,
+      productType: row.productType,
+      parentId: row.parentId,
+      variantLabel: row.variantLabel,
+      variantOptions: row.variantOptions,
+      bundleItems: row.bundleItems,
     });
     insertedIds.add(row.id);
     count += 1;

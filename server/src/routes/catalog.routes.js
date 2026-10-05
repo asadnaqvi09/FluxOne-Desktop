@@ -24,4 +24,7 @@ router.get(
 // Scanner / Enter — exact SKU or barcode
 router.get('/products/sku/:sku', ...cashierOnly, requireSync, catalogController.getBySku);
 
+// Variant children under parent (picker)
+router.get('/products/:id/children', ...cashierOnly, requireSync, catalogController.listChildren);
+
 export default router;

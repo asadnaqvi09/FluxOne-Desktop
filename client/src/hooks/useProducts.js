@@ -140,7 +140,14 @@ export function useProductSkuLookup() {
         if (!data?.product) {
           return { success: false, error: i18n.t('cart.skuNotRecognized') }
         }
-        return { success: true, data: { product: data.product } }
+        return {
+          success: true,
+          data: {
+            product: data.product,
+            needsVariantPick: Boolean(data.needsVariantPick),
+            children: data.children || [],
+          },
+        }
       } catch (err) {
         const mapped = toResultError(err)
         if (mapped.status === 404) {

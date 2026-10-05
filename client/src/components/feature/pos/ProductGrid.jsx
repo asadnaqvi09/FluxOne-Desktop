@@ -1,13 +1,17 @@
-import { useDeferredValue } from 'react'
+import { useDeferredValue, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { usePos } from '@/context/PosContext'
 import { useCart } from '@/hooks/useCart'
 import { useProducts } from '@/hooks/useProducts'
+import VariantPickerDialog from '@/components/feature/pos/VariantPickerDialog'
+import { Badge } from '@/components/ui/badge'
 import { stockTone } from '@/lib/cartMath'
 import { formatMoney } from '@/lib/formatCurrency'
+import { childDisplayName } from '@/lib/variantResolve'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
 
+// Prefer reusable VariantPickerDialog — do not inline option UI here
 export default function ProductGrid() {
   const { t } = useTranslation()
   const {
@@ -25,6 +29,7 @@ export default function ProductGrid() {
     deferredCategory !== categoryId ||
     deferredSub !== subCategory
   const { addItem } = useCart()
+  const [pickerParent, setPickerParent] = useState(null)
 
   const {
     products,
@@ -50,14 +55,22 @@ export default function ProductGrid() {
     return t('pos.inStock')
   }
 
-  const handleAdd = async (p) => {
+  const handleAddSellable = async (p) => {
     const r = await addItem({ productId: p.id, product: p })
     if (!r.success) {
       toast.error(r.error)
       return
     }
     if (r.warning) toast.warning(r.warning)
-    else toast.success(t('pos.addedToast', { name: p.name }))
+    else toast.success(t('pos.addedToast', { name: childDisplayName(p) || p.name }))
+  }
+
+  const handleCardClick = (p) => {
+    if (p.isVariantParent || p.productType === 'variant') {
+      setPickerParent(p)
+      return
+    }
+    handleAddSellable(p)
   }
 
   return (
@@ -96,15 +109,16 @@ export default function ProductGrid() {
           </p>
         ) : (
           products.map((p) => {
+            const isParent = p.isVariantParent || p.productType === 'variant'
             const tone = stockTone(p.stock)
-            const outOfStock = p.stock <= 0
-            const label = stockText(p.stock)
+            const outOfStock = !isParent && p.stock <= 0
+            const label = isParent ? t('pos.variantsBadge') : stockText(p.stock)
             return (
               <button
                 key={p.id}
                 type="button"
                 disabled={outOfStock}
-                onClick={() => handleAdd(p)}
+                onClick={() => handleCardClick(p)}
                 className={cn(
                   'flex cursor-pointer flex-col items-start rounded-xl border border-border bg-card p-3 text-start transition-colors',
                   'hover:border-primary/60 hover:bg-[var(--brand-soft)]/60',
@@ -129,32 +143,54 @@ export default function ProductGrid() {
                 <strong className="mt-2 line-clamp-2 text-[0.88rem] leading-snug text-foreground">
                   {p.name}
                 </strong>
+                {p.variantLabel ? (
+                  <span className="mt-0.5 text-xs text-muted-foreground">{p.variantLabel}</span>
+                ) : null}
 
                 <span className="mt-1 text-xs text-muted-foreground">
-                  {tone === 'out'
-                    ? label
-                    : t('pos.availableStock', { stock: p.stock })}
+                  {isParent
+                    ? t('pos.chooseVariant')
+                    : tone === 'out'
+                      ? label
+                      : t('pos.availableStock', { stock: p.stock })}
                 </span>
 
-                <span className="mt-1 text-sm font-bold text-orange-500">
-                  {formatMoney(p.price)}
-                </span>
+                {!isParent ? (
+                  <span className="mt-1 text-sm font-bold text-orange-500">
+                    {formatMoney(p.price)}
+                  </span>
+                ) : null}
 
                 <span
                   className={cn(
                     'mt-2 rounded-full px-2.5 py-0.5 text-[10px] font-semibold',
-                    tone === 'in' && 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-400',
-                    tone === 'low' && 'bg-amber-50 text-amber-800 dark:bg-amber-950 dark:text-amber-400',
-                    tone === 'out' && 'bg-red-50 text-red-700 dark:bg-red-950 dark:text-red-400',
+                    isParent && 'bg-sky-50 text-sky-800 dark:bg-sky-950 dark:text-sky-300',
+                    !isParent && tone === 'in' && 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-400',
+                    !isParent && tone === 'low' && 'bg-amber-50 text-amber-800 dark:bg-amber-950 dark:text-amber-400',
+                    !isParent && tone === 'out' && 'bg-red-50 text-red-700 dark:bg-red-950 dark:text-red-400',
                   )}
                 >
                   {label}
                 </span>
+                {isParent ? (
+                  <Badge variant="secondary" className="mt-1 text-[10px]">
+                    {t('pos.variantsBadge')}
+                  </Badge>
+                ) : null}
               </button>
             )
           })
         )}
       </div>
+
+      <VariantPickerDialog
+        open={Boolean(pickerParent)}
+        onOpenChange={(open) => {
+          if (!open) setPickerParent(null)
+        }}
+        parent={pickerParent}
+        onConfirm={handleAddSellable}
+      />
     </div>
   )
 }

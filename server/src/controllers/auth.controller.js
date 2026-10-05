@@ -20,6 +20,7 @@ import { clearAuthCookie, setAuthCookie } from '../shared/utils/authCookie.js';
 import * as authModel from '../models/auth.model.js';
 import * as notificationModel from '../models/notification.model.js';
 import * as outboxHooks from '../modules/sync/outboxHooks.js';
+import * as syncMetaModel from '../models/syncMeta.model.js';
 import { isBcryptPasswordHash } from '../shared/utils/passwordHash.js';
 import { isSyncReady } from '../shared/middlewares/sync.middleware.js';
 
@@ -43,6 +44,17 @@ function passwordMatches(typedPassword, storedHash) {
 export function login(req, res) {
   try {
     const { userId, password } = req.body;
+
+    // Cloud branch lock — refuse all offline logins when branch is blocked
+    if (syncMetaModel.isBranchBlocked()) {
+      return error(
+        res,
+        'This branch is blocked. Offline login is disabled until the branch is reopened on cloud.',
+        403,
+        'BRANCH_BLOCKED'
+      );
+    }
+
     const online = isRequestOnline(req);
     const employee = authModel.findEmployeeByUserId(userId);
     if (!employee || !employee.isActive) {

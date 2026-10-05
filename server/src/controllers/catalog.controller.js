@@ -11,6 +11,14 @@ function withTaxes(product) {
   };
 }
 
+function withTaxesList(products = []) {
+  const taxMap = catalogModel.getTaxesForProducts(products.map((p) => p.id));
+  return products.map((p) => ({
+    ...p,
+    taxes: taxMap.get(p.id) || [],
+  }));
+}
+
 // Categories (Most Used is FE filter via popular=1, not a DB row)
 export function listCategories(req, res) {
   try {
@@ -53,11 +61,7 @@ export function listProducts(req, res) {
       page: q.page,
       pageSize: q.pageSize,
     });
-    const taxMap = catalogModel.getTaxesForProducts(result.items.map((p) => p.id));
-    const items = result.items.map((p) => ({
-      ...p,
-      taxes: taxMap.get(p.id) || [],
-    }));
+    const items = withTaxesList(result.items);
     return success(res, {
       needsSubcategory: false,
       items,
@@ -77,11 +81,43 @@ export function getBySku(req, res) {
     if (!code) return error(res, 'SKU is required', 400);
     const product = catalogModel.findBySkuOrBarcode(code);
     if (!product) return error(res, 'Product not found', 404);
+
+    // Variant parent barcode → option picker (never sell parent)
+    if (product.isVariantParent || product.productType === 'variant') {
+      const children = withTaxesList(catalogModel.listChildren(product.id));
+      return success(res, {
+        needsVariantPick: true,
+        product: withTaxes(product),
+        children,
+      });
+    }
+
     if (Number(product.stock) <= 0) {
       return error(res, stockOutMessage(0), 409, ERROR_CODE.INSUFFICIENT_STOCK);
     }
-    return success(res, { product: withTaxes(product) });
+    return success(res, { product: withTaxes(product), needsVariantPick: false });
   } catch (err) {
     return error(res, err.message || 'Failed to find product', 500);
+  }
+}
+
+/** GET /products/:id/children — sellable variant SKUs under a parent */
+export function listChildren(req, res) {
+  try {
+    const parentId = String(req.params.id || '').trim();
+    if (!parentId) return error(res, 'Product id is required', 400);
+    const parent = catalogModel.findProductById(parentId);
+    if (!parent) return error(res, 'Product not found', 404);
+    if (!parent.isVariantParent && parent.productType !== 'variant') {
+      return success(res, { parent: withTaxes(parent), children: [] });
+    }
+    const children = withTaxesList(catalogModel.listChildren(parentId));
+    return success(res, {
+      needsVariantPick: true,
+      parent: withTaxes(parent),
+      children,
+    });
+  } catch (err) {
+    return error(res, err.message || 'Failed to list variant children', 500);
   }
 }

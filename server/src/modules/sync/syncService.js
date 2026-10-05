@@ -106,16 +106,33 @@ export async function pullDelta() {
   if (!meta?.bootstrapDone) {
     return { pulled: false, reason: 'bootstrap_required' };
   }
-  if (!meta.lastPullAt) {
+  // Prefer cloud syncVersion as delta cursor
+  const since = meta.syncVersion || meta.lastPullAt;
+  if (!since) {
     return { pulled: false, reason: 'missing_last_pull_at' };
   }
 
-  const data = await cloudClient.getDelta(meta.branchId, meta.lastPullAt);
-  const counts = applyDelta(data);
-  return { pulled: true, counts, raw: data };
+  try {
+    const data = await cloudClient.getDelta(meta.branchId, since);
+    const counts = applyDelta(data);
+    return { pulled: true, counts, raw: data };
+  } catch (error) {
+    if (isCloudError(error) && error.status === 403) {
+      return {
+        pulled: false,
+        reason: 'branch_denied',
+        error: error.message || 'Branch access denied',
+      };
+    }
+    throw error;
+  }
 }
 
-export async function pushOutbox(batchSize = 50) {
+/** Cloud push batch max is 200 — keep default at the contract limit. */
+export const SYNC_PUSH_MAX_EVENTS = 200;
+
+export async function pushOutbox(batchSize = SYNC_PUSH_MAX_EVENTS, { requeue = true } = {}) {
+  const limit = Math.min(Math.max(1, Number(batchSize) || SYNC_PUSH_MAX_EVENTS), SYNC_PUSH_MAX_EVENTS);
   if (!isNetworkOnline()) {
     return {
       pushed: 0,
@@ -127,12 +144,15 @@ export async function pushOutbox(batchSize = 50) {
   }
 
   // Failed rows were stuck forever — re-queue so "retry on sync" actually works.
-  const requeued = syncOutboxModel.requeueFailed();
-  if (requeued > 0) {
-    syncLog('info', `Re-queued ${requeued} failed outbox event(s) for retry`);
+  let requeued = 0;
+  if (requeue) {
+    requeued = syncOutboxModel.requeueFailed();
+    if (requeued > 0) {
+      syncLog('info', `Re-queued ${requeued} failed outbox event(s) for retry`);
+    }
   }
 
-  const pending = syncOutboxModel.listPending(batchSize);
+  const pending = syncOutboxModel.listPending(limit);
   if (!pending.length) {
     return {
       pushed: 0,
@@ -167,7 +187,7 @@ export async function pushOutbox(batchSize = 50) {
       accepted: 0,
       rejected: 0,
       pending: syncOutboxModel.countPending(),
-      reason: 'auth_failed',
+      reason: error?.status === 403 ? 'branch_denied' : 'auth_failed',
       error: error.message,
       requeued,
     };
@@ -253,12 +273,13 @@ function handlePushFailure(pending, error, { requeued = 0 } = {}) {
   }
 
   if (type === CLOUD_ERROR_TYPE.AUTH) {
+    const reason = status === 403 ? 'branch_denied' : 'auth_failed';
     return {
       pushed: 0,
       accepted: 0,
       rejected: 0,
       pending: syncOutboxModel.countPending(),
-      reason: 'auth_failed',
+      reason,
       error: message,
       requeued,
     };
@@ -326,17 +347,49 @@ function handlePushFailure(pending, error, { requeued = 0 } = {}) {
   };
 }
 
-export async function runSyncCycle({ batchSize = 50 } = {}) {
+export async function runSyncCycle({ batchSize = SYNC_PUSH_MAX_EVENTS } = {}) {
   const meta = syncMetaModel.getSyncMeta();
-  const push = await pushOutbox(batchSize);
+  const limit = Math.min(
+    Math.max(1, Number(batchSize) || SYNC_PUSH_MAX_EVENTS),
+    SYNC_PUSH_MAX_EVENTS
+  );
+
+  // Chunk offline queues into ≤200 events per POST
+  let push = {
+    pushed: 0,
+    accepted: 0,
+    rejected: 0,
+    pending: syncOutboxModel.countPending(),
+  };
+  let firstBatch = true;
+  for (;;) {
+    const batch = await pushOutbox(limit, { requeue: firstBatch });
+    firstBatch = false;
+    push = {
+      ...batch,
+      pushed: (push.pushed || 0) + (batch.pushed || 0),
+      accepted: (push.accepted || 0) + (batch.accepted || 0),
+      rejected: (push.rejected || 0) + (batch.rejected || 0),
+    };
+    if (batch.reason === 'branch_denied' || batch.reason === 'auth_failed') {
+      break;
+    }
+    if ((batch.accepted || 0) === 0 || (batch.pending || 0) === 0) {
+      break;
+    }
+  }
 
   let pull = { pulled: false, reason: 'skipped' };
-  if (meta?.bootstrapDone && isNetworkOnline()) {
+  if (push.reason === 'branch_denied') {
+    pull = { pulled: false, reason: 'branch_denied', error: push.error };
+  } else if (meta?.bootstrapDone && isNetworkOnline()) {
     try {
       pull = await pullDelta();
     } catch (error) {
       if (error instanceof CloudError && error.type === CLOUD_ERROR_TYPE.NETWORK) {
         pull = { pulled: false, reason: 'network', error: error.message };
+      } else if (error instanceof CloudError && error.status === 403) {
+        pull = { pulled: false, reason: 'branch_denied', error: error.message };
       } else if (error instanceof CloudError && error.type === CLOUD_ERROR_TYPE.AUTH) {
         pull = { pulled: false, reason: 'auth_failed', error: error.message };
       } else {
@@ -399,4 +452,5 @@ export default {
   pushOutbox,
   runSyncCycle,
   getSyncStatus,
+  SYNC_PUSH_MAX_EVENTS,
 };
